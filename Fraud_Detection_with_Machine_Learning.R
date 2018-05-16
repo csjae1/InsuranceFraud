@@ -16,7 +16,7 @@ library(nortest)
 library(rpart) # decision tree
 library(rpart.plot)
 library(ROCR) # roc
-library(GGally) #상관분석 패키지 ***
+library(GGally) #correlation analysis package ***
 library(mice)
 
 
@@ -33,20 +33,20 @@ fmlyDF<- fread(input = "data/fmly_data.csv",
 fpinfoDF<- fread(input = "data/fpinfo_data.csv",
                  header = TRUE)
 # 전처리 ----
-## cust 전처리
+## cust data cleaning
 # custDF[SIU_CUST_YN == "",] 
 str(custDF)
 custDF <- custDF[SIU_CUST_YN != "", -2]
 custDF$SIU_CUST_YN <- as.factor(custDF$SIU_CUST_YN)
-colSums(is.na(custDF)) #na값 확인
+colSums(is.na(custDF)) #na value check
 
-# RESI_TYPE_CODE(주거지), CHLD_CNT(자녀수), LTBN_CHLD_AGE(아이들 나이) 결측치,
-# OCCP_GRP_2 == "" 일때 [기타] 삽입, 
-# 직업군 별 평균 JPBASE_HSHD_INCM을 is.na(JPBASE_HSHD_INCM)에 넣음
+# RESI_TYPE_CODE(residence), CHLD_CNT(child count), LTBN_CHLD_AGE(youngest children age) na values,
+# When OCCP_GRP_2 == "", insert into [기타], 
+# Insert JPBASE_HSHD_INCM into is.na(JPBASE_HSHD_INCM)
 
-custDF$RESI_TYPE_CODE[is.na(custDF$RESI_TYPE_CODE)] <- 99 #주거지 모르면 기타에
-custDF$CHLD_CNT[is.na(custDF$CHLD_CNT)] <- 0 #아이들 명수 모르면 0명에
-custDF$LTBN_CHLD_AGE[is.na(custDF$LTBN_CHLD_AGE)] <- 0 #위이랑 같이 결측치, 0명일때 0세임
+custDF$RESI_TYPE_CODE[is.na(custDF$RESI_TYPE_CODE)] <- 99
+custDF$CHLD_CNT[is.na(custDF$CHLD_CNT)] <- 0
+custDF$LTBN_CHLD_AGE[is.na(custDF$LTBN_CHLD_AGE)] <- 0
 
 custDF$OCCP_GRP_2 <- ifelse(custDF$OCCP_GRP_2 == "",
                             sort(unique(custDF$OCCP_GRP_2),decreasing = TRUE)[15],
@@ -65,11 +65,10 @@ summary(claimDF)
 nrow(claimDF)
 colSums(is.na(claimDF))
 table(claimDF$HOSP_SPEC_DVSN)
-claimDF[is.na(claimDF$HOSP_SPEC_DVSN),]$HOSP_SPEC_DVSN <- 10 # 최빈수 10 
+claimDF[is.na(claimDF$HOSP_SPEC_DVSN),]$HOSP_SPEC_DVSN <- 10 # Mode 10 
 
 
-# 변수생성 ----- 
-# 청구사유코드 변수생성
+# Creating Variables ----- 
 custDF <- custDF[,c(2:24,1)]
 
 exampleDF <- merge(claimDF, custDF[,c(1,2)], all.x = TRUE, by = "CUST_ID")
@@ -103,7 +102,7 @@ resn_code
 
 
 
-# 병원종류 변수생성
+# Hosp_spec variable 
 hosp_spec <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 hosp_spec_colname <- c( "종합병원", "병원", "요양병원", "의원", 
                         "치과병원", "치과의원", "보건의료원", 
@@ -121,7 +120,7 @@ for (i in 1:length(sort(unique(claimDF$HOSP_SPEC_DVSN)))) {
 }
 hosp_spec[is.na(hosp_spec)] <- 0
 hosp_spec <- ratio_fun(hosp_spec)
-# 사고구분 변수생성
+# Categorizing Accidents
 acci_dvsn <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 acci_colname <- c("재해","교통재해","질병")
 for (i in 1:length(sort(unique(claimDF$ACCI_DVSN)))) {
@@ -137,11 +136,11 @@ for (i in 1:length(sort(unique(claimDF$ACCI_DVSN)))) {
 }
 acci_dvsn[is.na(acci_dvsn)] <- 0
 acci_dvsn <- ratio_fun(acci_dvsn)
-# 청구 건수 변수생성
+# Claim Number Variable
 claim_num <- exampleDF[,.(청구건수 = .N),by="CUST_ID"]
-# 총입원일수 변수생성
+# Total Hospitalization Variable
 vldi_sum <- exampleDF[,.("총입원일수" = sum(VLID_HOSP_OTDA)), by="CUST_ID"]
-# fp변경여부 변수생성
+# Change fp Variable
 change_fp <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 acci_colname <- c("No","Y")
 for (i in 1:length(sort(unique(claimDF$CHANG_FP_YN)))) {
@@ -159,7 +158,7 @@ colnames(change_fp)[2:3] <- c("chang_N", "chang_Y")
 change_fp <- change_fp[,":="(chang_ratio = chang_Y / (chang_Y + chang_N)), 
                        by = "CUST_ID"][,c("CUST_ID","chang_ratio")]
 
-# 유의병원여부 변수생성
+# Hospital Related to Fraud Variable
 heed_hosp <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 heed_colname <- c("No","Y")
 for (i in 1:length(sort(unique(claimDF$HEED_HOSP_YN)))) {
@@ -179,7 +178,7 @@ heed_hosp <- heed_hosp[,":="(heed_ratio = heed_Y / (heed_Y + heed_N)),
                        by = "CUST_ID"][,c("CUST_ID","heed_ratio")]
 summary(heed_hosp)
 
-# 청구금액 변수생성
+# Demand Amount Variable
 dmnd_amt <- exampleDF[,c("CUST_ID","SIU_CUST_YN","DMND_AMT")]
 dmnd_amt <- merge(dmnd_amt[,.(DMND_mean = mean(DMND_AMT)),by = "CUST_ID"],
                   custDF[,1:2], by = "CUST_ID", all.x = TRUE)
@@ -187,7 +186,7 @@ by(dmnd_amt$DMND_mean, dmnd_amt$SIU_CUST_YN, ad.test) # 정규성깨짐
 wilcox.test(dmnd_amt$DMND_mean ~ dmnd_amt$SIU_CUST_YN, #윌콕슨 순위합 검정
             alternative = "two.sided")
 dmnd_amt
-# 고객역할코드 변수생성
+# Cust Role Variable
 cust_role <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 role_colname <- unique(cnttDF$CUST_ROLE)
 for (i in 1:length(sort(unique(cnttDF$CUST_ROLE)))) {
@@ -204,7 +203,7 @@ for (i in 1:length(sort(unique(cnttDF$CUST_ROLE)))) {
 cust_role[is.na(cust_role)] <- 0
 cust_role <- ratio_fun(cust_role)
 
-# 판매채널코드 변수생성
+# Channel Code Variable
 chnl_code <- data.table(CUST_ID = sort(unique(custDF$CUST_ID)))
 chnl_colname <- c("설계사", "법인", "홈페이지", "전화영업",
                   "방카슈랑스", "남성전문조직", "보험대리점")
@@ -221,7 +220,7 @@ for (i in 1:length(sort(unique(cnttDF$SALE_CHNL_CODE)))) {
 chnl_code[is.na(chnl_code)] <- 0
 chnl_code <- ratio_fun(chnl_code)
 
-# 분석데이터
+# Analysis Data
 analysisDF <- merge(custDF, resn_code, by = "CUST_ID", all.x = TRUE)
 analysisDF <- merge(analysisDF, hosp_spec , by = "CUST_ID", all.x = TRUE)
 analysisDF <- merge(analysisDF, acci_dvsn, by = "CUST_ID", all.x = TRUE)
@@ -232,7 +231,7 @@ analysisDF <- merge(analysisDF, dmnd_amt[,1:2], by = "CUST_ID", all.x = TRUE)
 analysisDF <- merge(analysisDF, cust_role, by = "CUST_ID", all.x = TRUE)
 analysisDF <- merge(analysisDF, chnl_code, by = "CUST_ID", all.x = TRUE)
 
-# 직업 변수생성
+# Occupation Variable
 occp_grp2 <- data.table(CUST_ID = sort(unique(analysisDF$CUST_ID)))
 occp_colname <- c( "사무직", "2차산업 종사자", "3차산업 종사자", 
                    "고위 공무원", "자영업", "공무원", 
@@ -261,9 +260,9 @@ analysisDF <- merge(analysisDF, occp_grp2, by = "CUST_ID", all.x = TRUE)
 
 
 
-# 분석시작 ----
+# Analysis of Variables----
 
-##전처리
+##Clean-up
 str(analysisDF)
 colSums(is.na(analysisDF))
 analysisDF$SEX <- as.factor(analysisDF$SEX)
@@ -287,7 +286,7 @@ colnames(analysisDF)
 
 colnames(analysisDF)
 
-# 주택가격
+# Housing Price
 bx <- ggplot(data=analysisDF, aes(x=SIU_CUST_YN, y=log(RESI_COST)))
 bx + geom_boxplot(aes(color=SIU_CUST_YN))
 
@@ -295,7 +294,7 @@ h <- ggplot(data=analysisDF, aes(x=log(RESI_COST)))
 h + geom_histogram(aes(colour=SIU_CUST_YN, fill=SIU_CUST_YN))
 
 
-# cust_incm(고객추정소득)
+# cust_incm(Customer Income)
 # na 4823
 bx <- ggplot(data=analysisDF, aes(x=SIU_CUST_YN, y=CUST_INCM))
 bx + geom_boxplot(aes(color=SIU_CUST_YN))
@@ -329,7 +328,7 @@ h <- ggplot(data=analysisDF, aes(x=JPBASE_HSHD_INCM))
 h + geom_histogram(data=analysisDF, aes(colour=SIU_CUST_YN, fill=SIU_CUST_YN))
 
 
-# TOTALPREM -(납입총보헙료) 거의 똑같음 NA : 5321
+# TOTALPREM -(Total Payment) NA : 5321
 
 box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = TOTALPREM))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
@@ -354,20 +353,20 @@ bar + geom_bar(aes(fill=SIU_CUST_YN))
 
 
 
-# 자녀나이
+# Children Age
 box <- ggplot(data = analysisDF[LTBN_CHLD_AGE>0,], aes(x = SIU_CUST_YN, y = LTBN_CHLD_AGE))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 hist <- ggplot(data = analysisDF[LTBN_CHLD_AGE>0,], aes(x = LTBN_CHLD_AGE, fill = SIU_CUST_YN))
 hist <- geom_histogram()
 
-# 자녀수
+# Children Count
 box <- ggplot(data = analysisDF[CHLD_CNT>0,], aes(x = SIU_CUST_YN, y = CHLD_CNT))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
 b <- ggplot(data = analysisDF, aes(x = CHLD_CNT))
 b + geom_bar(aes(fill = SIU_CUST_YN))
 
-# 최대보험료 MAX_PRM
+# MAX_PRM
 hist <- ggplot(data = analysisDF[MAX_PRM<5500000], aes(x=MAX_PRM, fill = SIU_CUST_YN))
 hist + geom_histogram()
 
@@ -377,7 +376,7 @@ hist + geom_histogram()
 box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = log(MAX_PRM)))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
-# 나이별 사기자
+# Fraud by Age
 age <- analysisDF[,c(1:2,4)]
 age$group <- cut(x      = age$AGE,
                  breaks = seq(from = 0, to = 90, by = 10),
@@ -391,7 +390,7 @@ h + geom_histogram( bins = 8,aes(fill = SIU_CUST_YN))
 par(mfrow = c(1,1))
 
 
-# 청구건수
+# Application Number
 box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = 청구건수))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
@@ -408,7 +407,7 @@ h + geom_histogram(aes(fill = SIU_CUST_YN))
 
 
 
-# 청구금액 평균
+# Average Claim Amount
 box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = DMND_mean))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
@@ -423,7 +422,7 @@ h + geom_histogram(aes(fill = SIU_CUST_YN))
 
 
 
-# 총입원일수
+# Total Hospitalization Days
 box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = 총입원일수))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
@@ -443,14 +442,14 @@ box <- ggplot(data = analysisDF, aes(x = SIU_CUST_YN, y = heed_ratio))
 box + geom_boxplot(outlier.color = "red", outlier.size = 2, aes(color = SIU_CUST_YN))
 
 
-# 직업별 히스토그램
+# Histogram by jobs
 h <- ggplot(data = analysisDF, aes(x = OCCP_GRP_2,
                                    fill = SIU_CUST_YN))
 h + geom_bar()
 
 
 
-# 역할 코드
+# Job Code
 par(mfrow = c(2,4))
 for (i in 52:58) {
   boxplot(unlist(analysisDF[,..i]) ~ analysisDF$SIU_CUST_YN, 
@@ -459,7 +458,7 @@ for (i in 52:58) {
 }
 
 
-# 사고구분
+# Accident Analysis
 par(mfrow = c(1,3))
 for (i in 45:47) {
   boxplot(unlist(analysisDF[,..i]) ~ analysisDF$SIU_CUST_YN, 
@@ -469,7 +468,7 @@ for (i in 45:47) {
 
 
 
-# 청구사유코드
+# Claim Reason Code
 par(mfrow = c(2,4))
 for (i in 25:32) {
   boxplot(unlist(analysisDF[,..i]) ~ analysisDF$SIU_CUST_YN, 
@@ -478,7 +477,7 @@ for (i in 25:32) {
 }
 
 
-# 병원
+# Hospital
 par(mfrow = c(3,4))
 for (i in 33:44) {
   boxplot(unlist(analysisDF[,..i]) ~ analysisDF$SIU_CUST_YN, 
@@ -486,7 +485,7 @@ for (i in 33:44) {
           main = colnames(analysisDF[,..i]))
 }
 
-# 판매채널 코드
+# Sell Code
 colnames(analysisDF)
 
 par(mfrow = c(2,4))
@@ -497,7 +496,7 @@ for (i in 84:90) {
           outline = F)
 }
 
-# 결측치 대체----
+# Replacing NA values----
   
 colSums(is.na(analysisDF))
 nafill <- mice(analysisDF[, c("AGE", "LTBN_CHLD_AGE", "MAX_PRM", 
@@ -514,7 +513,7 @@ analysisDF$청구건수 <- log(analysisDF$청구건수)
 analysisDF$RESI_COST <- log(analysisDF$RESI_COST+100)
 
 
-# 분석 변수선택----
+# Choosing Variables for Analysis----
 select_col <- c("CUST_ID","SIU_CUST_YN","SEX", "AGE",
                 "RESI_COST", "LTBN_CHLD_AGE", "CHLD_CNT",
                 "MAX_PRM", "청구건수", "DMND_mean",
@@ -531,7 +530,7 @@ analysisDF2$SIU_CUST_YN <- as.factor(analysisDF2$SIU_CUST_YN)
 
 
 
-# 이상치 처리
+# Removing Outlier 
 outlier <- c("RESI_COST", "MAX_PRM", "청구건수","총입원일수", "DMND_mean")
 
 for (i in outlier) {
@@ -545,8 +544,8 @@ for (i in outlier) {
 
 
 
-# 로지스틱 회귀분석----
-##샘플방법 1
+# Logistic Regression----
+##Sampling 1
 # index <- createDataPartition(analysisDF2$SIU_CUST_YN, p=0.7, list = FALSE)
 # train <- analysisDF2[index,-1]
 # 
@@ -557,7 +556,7 @@ for (i in outlier) {
 # test <- analysisDF2[-index,-1]
 
 
-# 샘플방법2
+# Sampling 2
 analysisDF3 <- rbind(analysisDF2[SIU_CUST_YN == 1,],analysisDF2[SIU_CUST_YN == 0,] %>% sample_n(9030))
 
 
