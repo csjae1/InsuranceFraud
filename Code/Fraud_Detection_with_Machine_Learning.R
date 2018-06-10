@@ -1212,6 +1212,5 @@ test$rf.model2 <- pred.rf2
 a <- test[,c("SIU_CUST_YN","logit.model","dt.model","rf.model2")]
 a$res <- ifelse(a$logit.model == 1 | a$dt.model == 1 | 
                   a$rf.model2 == 1,1,0)
-confusionMatrix(as.factor(a$res), as.factor(a$SIU_CUST_YN)) # 0.3494 -> 0.4513  ->0.4966   
+confusionMatrix(as.factor(a$res), as.factor(a$SIU_CUST_YN)) # 0.3494 -> 0.4513 -> 0.4966   
 # pc9 이상치 결측치 0.4308
-
